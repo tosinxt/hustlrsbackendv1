@@ -30,8 +30,17 @@ router.post(
   ],
   async (req, res) => {
     try {
+      console.log('Signup request received:', { email: req.body.email });
       const { email, password, firstName, lastName, userType } = req.body;
       
+      // Input validation
+      if (!email || !password || !firstName || !lastName || !userType) {
+        return res.status(400).json({
+          success: false,
+          error: 'Missing required fields'
+        });
+      }
+
       const result = await authService.signUp(email, password, {
         firstName,
         lastName,
@@ -39,22 +48,46 @@ router.post(
       });
 
       if (!result.success) {
-        return res.status(400).json(result);
+        console.error('Signup failed:', result.error);
+        return res.status(400).json({
+          success: false,
+          error: result.error || 'Failed to create user account',
+          details: result.details
+        });
       }
+
+      console.log('Signup successful for user:', result.data.user?.id);
+      
+      // Don't send sensitive data in the response
+      const { user, session } = result.data;
+      const userResponse = {
+        id: user.id,
+        email: user.email,
+        firstName: firstName,
+        lastName: lastName,
+        userType: userType,
+        isVerified: user.email_confirmed_at != null
+      };
 
       res.status(201).json({
         success: true,
-        message: 'User registered successfully',
+        message: result.message || 'User registered successfully',
         data: {
-          user: result.data.user,
-          session: result.data.session
+          user: userResponse,
+          session: session ? {
+            access_token: session.access_token,
+            refresh_token: session.refresh_token,
+            expires_in: session.expires_in,
+            token_type: session.token_type
+          } : null
         }
       });
     } catch (error) {
       console.error('Signup error:', error);
       res.status(500).json({
         success: false,
-        error: 'Server error during signup'
+        error: error.message || 'Server error during signup',
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
       });
     }
   }

@@ -4,6 +4,9 @@ class AuthService {
   // Sign up a new user
   async signUp(email, password, userData) {
     try {
+      console.log('Starting user signup for:', email);
+      
+      // First, create the auth user
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
@@ -12,33 +15,28 @@ class AuthService {
             first_name: userData.firstName,
             last_name: userData.lastName,
             user_type: userData.userType
-          }
+          },
+          // Don't try to create the profile here, we'll handle it in the trigger
+          emailRedirectTo: process.env.SUPABASE_REDIRECT_URL || 'http://localhost:3000/auth/callback'
         }
       });
 
-      if (signUpError) throw signUpError;
+      if (signUpError) {
+        console.error('Auth signup error:', signUpError);
+        throw signUpError;
+      }
 
-      // Insert additional user data into the profiles table
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .insert([
-          {
-            id: authData.user.id,
-            email,
-            first_name: userData.firstName,
-            last_name: userData.lastName,
-            user_type: userData.userType
-          }
-        ]);
-
-      if (profileError) throw profileError;
-
+      console.log('Auth user created:', authData.user?.id);
+      
+      // The profile will be created by the database trigger
+      // We'll just return the auth data for now
       return {
         success: true,
         data: {
           user: authData.user,
           session: authData.session
-        }
+        },
+        message: 'Signup successful! Please check your email to verify your account.'
       };
     } catch (error) {
       console.error('Sign up error:', error);
